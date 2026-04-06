@@ -23,3 +23,6 @@ ENV/
 # IDE / Editor
 .vscode/
 .idea/
+
+# .md files to ignore
+TODO.md

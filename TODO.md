@@ -7,8 +7,8 @@
 
 ## PHASE 0 — Project Setup
 
-- [ ] Create repo on GitHub named `quick-eda`
-- [ ] Set up folder structure exactly as:
+- [x] Create repo on GitHub named `quick-eda`
+- [x] Set up folder structure exactly as:
   ```
   quick_eda/
   ├── quick_eda/
@@ -33,16 +33,16 @@
   ├── TODO.md
   └── .gitignore
   ```
-- [ ] Create `setup.py` with name, version `0.1.0`, author, dependencies
-- [ ] Create `requirements.txt`:
+- [x] Create `setup.py` with name, version `0.1.0`, author, dependencies
+- [x] Create `requirements.txt`:
   - `pandas>=1.3`
   - `numpy>=1.21`
   - `matplotlib>=3.4`
   - `seaborn>=0.11`
   - `IPython`
-- [ ] Create `.gitignore` (Python standard + `.ipynb_checkpoints`, `dist/`, `*.egg-info`)
-- [ ] Set up virtual environment locally
-- [ ] First commit: skeleton files only, nothing functional yet
+- [x] Create `.gitignore` (Python standard + `.ipynb_checkpoints`, `dist/`, `*.egg-info`)
+- [x] Set up virtual environment locally
+- [x] First commit: skeleton files only, nothing functional yet
 
 ---
 
@@ -404,7 +404,7 @@
 
 ## Current Status
 
-- [ ] Phase 0 — Setup
+- [x] Phase 0 — Setup
 - [ ] Phase 1 — Classifier
 - [ ] Phase 2 — Profiler
 - [ ] Phase 3 — Relationships
