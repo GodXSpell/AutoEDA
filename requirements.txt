@@ -4,3 +4,6 @@ matplotlib>=3.4
 seaborn>=0.11
 ipython>=7.0
 pytest>=7.0
+jinja2>=3.0
+xlrd>=2.0
+openpyxl>=3.0

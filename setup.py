@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="quick-eda",
-    version="0.1.0",
+    version="0.1.1",
     author="Tarunpreet Singh",
     description="TL;DR for your dataset — quick insights, minimal noise, actionable results.",
     long_description=open("README.md").read(),
@@ -14,6 +14,9 @@ setup(
         "matplotlib>=3.4",
         "seaborn>=0.11",
         "IPython",
+        "jinja2>=3.0",
+        "xlrd>=2.0",
+        "openpyxl>=3.0" 
     ],
     python_requires=">=3.8",
 )

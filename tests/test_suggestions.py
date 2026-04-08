@@ -46,9 +46,34 @@ def test_low_missing_suggest_impute_median():
     assert any("median" in s.lower() for s in result)
 
 def test_high_skew_suggest_transform():
-    profile = {"missing_pct": 0, "skew": 2.5, "outlier_pct": 0, "zeros_pct": 0, "kurtosis": 0}
+    profile = {"missing_pct": 0, "skew": 2.5, "min": 0.5, "outlier_pct": 0, "zeros_pct": 0, "kurtosis": 0}
     result  = suggest_for_column("col", NUMERIC_CONTINUOUS, profile, [])
     assert any("log transform" in s.lower() for s in result)
+
+def test_high_skew_negative_values():
+    profile = {"missing_pct": 0, "skew": 2.5, "min": -1.0, "outlier_pct": 0, "zeros_pct": 0, "kurtosis": 0}
+    result  = suggest_for_column("col", NUMERIC_CONTINUOUS, profile, [])
+    assert any("power transform" in s.lower() for s in result)
+    # The actual string returned is: "Consider power transform (Box-Cox) — column has negative values, log transform not applicable"
+    # Since "log transform" is IN the power transform message, asserting not any("log transform" in s.lower()) will fail.
+    # So we don't assert that.
+    assert not any(s.startswith("Apply log transform") for s in result)
+
+def test_drop_suppresses_other_suggestions():
+    # near constant with high missing and skew etc should only get drop
+    profile = {"missing_pct": 60, "skew": 5.0, "min": 0, "outlier_pct": 20, "unique_count": 1}
+    result_nr = suggest_for_column("col", NEAR_CONSTANT, profile, [])
+    assert len(result_nr) == 1
+    assert any("dropping" in s.lower() for s in result_nr)
+
+    result_id = suggest_for_column("col", ID_LIKE, profile, [])
+    assert len(result_id) == 1
+    assert any("identifier" in s.lower() for s in result_id)
+
+    # high missing > 50 also suppresses others now
+    result_miss = suggest_for_column("col", NUMERIC_CONTINUOUS, profile, [])
+    assert len(result_miss) == 1
+    assert any("dropping" in s.lower() for s in result_miss)
 
 def test_high_outliers_suggest_investigate():
     profile = {"missing_pct": 0, "skew": 0, "outlier_pct": 12.0, "zeros_pct": 0, "kurtosis": 0}

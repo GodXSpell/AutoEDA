@@ -1,416 +1,725 @@
-# quick_eda — Project TODO
-
-> Build order matters. Work top to bottom. Don't jump ahead.
-> Each task should be completable in one focused session.
-
----
-
-## PHASE 0 — Project Setup
-
-- [x] Create repo on GitHub named `quick-eda`
-- [x] Set up folder structure exactly as:
-  ```
-  quick_eda/
-  ├── quick_eda/
-  │   ├── __init__.py
-  │   ├── core.py
-  │   ├── classifier.py
-  │   ├── profiler.py
-  │   ├── relationships.py
-  │   ├── suggestions.py
-  │   ├── renderer.py
-  │   └── plots.py
-  ├── tests/
-  │   ├── test_classifier.py
-  │   ├── test_profiler.py
-  │   ├── test_suggestions.py
-  │   └── test_core.py
-  ├── examples/
-  │   └── demo.ipynb
-  ├── setup.py
-  ├── requirements.txt
-  ├── README.md
-  ├── TODO.md
-  └── .gitignore
-  ```
-- [x] Create `setup.py` with name, version `0.1.0`, author, dependencies
-- [x] Create `requirements.txt`:
-  - `pandas>=1.3`
-  - `numpy>=1.21`
-  - `matplotlib>=3.4`
-  - `seaborn>=0.11`
-  - `IPython`
-- [x] Create `.gitignore` (Python standard + `.ipynb_checkpoints`, `dist/`, `*.egg-info`)
-- [x] Set up virtual environment locally
-- [x] First commit: skeleton files only, nothing functional yet
-
----
-
-## PHASE 1 — Column Classifier (`classifier.py`)
-
-> This is the most important module. Everything downstream depends on getting column types right.
-
-- [ ] Define the type enum or constants:
-  ```
-  NUMERIC_CONTINUOUS
-  NUMERIC_DISCRETE       # int with low unique count (< 20 unique values)
-  CATEGORICAL_LOW        # object/category with <= 15 unique values
-  CATEGORICAL_HIGH       # object/category with > 15 unique values
-  DATETIME
-  BOOLEAN
-  CONSTANT               # only 1 unique value
-  NEAR_CONSTANT          # top value >= 98% of rows
-  ID_LIKE                # unique ratio > 95%, int or object
-  ```
-
-- [ ] Write `classify_column(series) -> str` function:
-  - [ ] Check constant first (fastest exit)
-  - [ ] Check near-constant second
-  - [ ] Check ID-like (unique ratio heuristic)
-  - [ ] Check pandas dtype for datetime
-  - [ ] Check boolean
-  - [ ] Check numeric — then decide continuous vs discrete based on unique count
-  - [ ] Fall through to categorical low vs high based on unique count threshold
-
-- [ ] Write `classify_dataframe(df) -> dict` — returns `{col_name: type}` for every column
-
-- [ ] Edge cases to handle explicitly:
-  - [ ] All-null column → classify as CONSTANT, flag for drop
-  - [ ] Numeric column that looks like an ID (e.g. `user_id` stored as int) → ID_LIKE wins over NUMERIC
-  - [ ] Boolean stored as 0/1 integers → detect and classify as BOOLEAN not NUMERIC
-  - [ ] Mixed type columns (object with some numbers) → classify as CATEGORICAL, add warning
-
-- [ ] Write unit tests in `tests/test_classifier.py`:
-  - [ ] Test each type with a synthetic series
-  - [ ] Test edge cases above
-  - [ ] Test that all columns in a real-ish df get classified without error
-
----
-
-## PHASE 2 — Profiler (`profiler.py`)
-
-> Per-column stats. Pure computation, no display.
-
-- [ ] Write `profile_numeric(series) -> dict`:
-  - [ ] `count` — non-null count
-  - [ ] `missing` — null count
-  - [ ] `missing_pct` — null % rounded to 1 decimal
-  - [ ] `mean`, `median`, `std`, `min`, `max`
-  - [ ] `skew` — pandas `.skew()`
-  - [ ] `kurtosis` — pandas `.kurtosis()`
-  - [ ] `outlier_count` — IQR method (< Q1 - 1.5×IQR or > Q3 + 1.5×IQR)
-  - [ ] `outlier_pct` — outliers as % of non-null rows
-  - [ ] `zeros_pct` — % of values that are exactly 0 (useful signal)
-  - [ ] `unique_count`
-
-- [ ] Write `profile_categorical(series) -> dict`:
-  - [ ] `count`, `missing`, `missing_pct`
-  - [ ] `unique_count`
-  - [ ] `top_values` — top 5 values and their % frequency as list of tuples
-  - [ ] `entropy` — optional but useful signal for uniformity
-
-- [ ] Write `profile_datetime(series) -> dict`:
-  - [ ] `min_date`, `max_date`
-  - [ ] `range_days`
-  - [ ] `missing`, `missing_pct`
-  - [ ] `is_monotonic` — always increasing/decreasing?
-
-- [ ] Write `profile_dataframe(df, col_types: dict) -> dict`:
-  - [ ] Routes each column to the right profiler based on classified type
-  - [ ] Returns `{col_name: profile_dict}` for all columns
-  - [ ] Skips CONSTANT / NEAR_CONSTANT / ID_LIKE columns from deep profiling (just flag them)
-
-- [ ] Dataset-level stats (attach to top of report dict):
-  - [ ] `shape` — (rows, cols)
-  - [ ] `total_missing_pct`
-  - [ ] `duplicate_rows` — count
-  - [ ] `memory_mb` — `df.memory_usage(deep=True).sum() / 1e6`
-  - [ ] `numeric_col_count`, `categorical_col_count`, `datetime_col_count`
-
-- [ ] Write unit tests in `tests/test_profiler.py`
-
----
-
-## PHASE 3 — Relationships (`relationships.py`)
-
-> Cross-column analysis. Only runs on columns worth analyzing.
-
-- [ ] Write `compute_correlations(df, col_types) -> dict`:
-  - [ ] Filter to only NUMERIC_CONTINUOUS and NUMERIC_DISCRETE columns
-  - [ ] Compute full Pearson correlation matrix
-  - [ ] Extract pairs where `abs(corr) >= 0.85` (make threshold configurable)
-  - [ ] Return as list of `(col_a, col_b, correlation_value)` tuples, sorted by abs value desc
-  - [ ] If fewer than 2 numeric columns → return empty list gracefully
-
-- [ ] Write `correlate_with_target(df, target_col, col_types) -> list`:
-  - [ ] Only runs if user passed `target=` parameter
-  - [ ] Returns all numeric columns ranked by abs correlation to target
-  - [ ] Include direction (positive/negative)
-
-- [ ] Write `detect_duplicate_columns(df) -> list`:
-  - [ ] Find columns with identical values (not just same name)
-  - [ ] Return list of duplicate pairs
-
-- [ ] Edge cases:
-  - [ ] Correlation on columns with zero variance → catch and skip
-  - [ ] All-null column in correlation → skip
-  - [ ] Single numeric column → skip correlation entirely, no error
-
----
-
-## PHASE 4 — Suggestion Engine (`suggestions.py`)
-
-> The most user-facing logic. Every rule maps to one plain-English line.
-
-- [ ] Define rule priority order (earlier rules = higher priority, column gets first matching suggestion):
-
-  ```
-  Priority 1 — DROP candidates
-    - CONSTANT column
-    - NEAR_CONSTANT column (>= 98%)
-    - ID_LIKE column
-    - ALL_NULL column
-    - Duplicate of another column
-
-  Priority 2 — HIGH CONCERN
-    - Missing > 50%
-    - Part of high-correlation pair (>= 0.85)
-    - Outlier % > 10%
-
-  Priority 3 — MODERATE CONCERN
-    - Missing 20–50%
-    - Skew abs > 1.0
-    - High cardinality categorical (> 50 unique)
-
-  Priority 4 — LOW CONCERN / INFO
-    - Missing < 20%
-    - Skew 0.5–1.0
-    - Kurtosis > 3 (heavy tails)
-    - Zeros > 30% (suspicious for a non-binary column)
-  ```
-
-- [ ] Write `suggest_for_column(col_name, col_type, profile, correlation_flags) -> list[str]`:
-  - [ ] Returns list of suggestion strings for that column
-  - [ ] Each string is one plain-English sentence
-  - [ ] Examples:
-    - `"Drop — constant column, carries no information"`
-    - `"Drop — appears to be a unique row identifier"`
-    - `"Impute with median — 12.3% missing"`
-    - `"Apply log transform — skew of 2.4 indicates right-skewed distribution"`
-    - `"Investigate outliers — 8.2% of values fall outside IQR bounds"`
-    - `"High correlation with 'age' (0.93) — consider dropping one before modeling"`
-    - `"High cardinality (142 unique values) — consider grouping rare categories"`
-
-- [ ] Write `suggest_for_dataframe(profiles, col_types, correlations) -> dict`:
-  - [ ] Returns `{col_name: [suggestions]}` for every flagged column
-  - [ ] Columns with no flags → not included in dict (keep output short)
-
-- [ ] Write `get_global_suggestions(dataset_stats) -> list[str]`:
-  - [ ] Dataset-level suggestions (not per-column):
-    - [ ] Duplicate rows present → "Remove N duplicate rows"
-    - [ ] Overall missing > 30% → "Dataset has high overall missingness — review collection pipeline"
-    - [ ] Very few rows (< 100) → "Small dataset — results may not generalize"
-
-- [ ] Write unit tests in `tests/test_suggestions.py`:
-  - [ ] Test each rule fires on the right input
-  - [ ] Test that clean columns produce zero suggestions
-  - [ ] Test priority ordering (constant column shouldn't also get impute suggestion)
-
----
-
-## PHASE 5 — Renderer (`renderer.py`)
-
-> All display logic lives here. Nothing else should call `print()` or `display()`.
-
-- [ ] Write `render_banner(dataset_stats)`:
-  - [ ] Rows, columns, missing %, duplicates, memory
-  - [ ] Use IPython HTML for stat tiles
-  - [ ] Keep it to 2-3 lines of visual height max
-
-- [ ] Write `render_warnings(col_suggestions, col_types)`:
-  - [ ] Only show columns that have suggestions
-  - [ ] Group by severity: DROP first, then HIGH, then MODERATE, then INFO
-  - [ ] Format: `  income   — 10.2% missing, skew 2.3`
-  - [ ] If no warnings → print `"✓ No issues detected"`
-
-- [ ] Write `render_suggestions(col_suggestions, global_suggestions)`:
-  - [ ] Numbered list, one line per suggestion
-  - [ ] Format: `  1. Drop user_id — unique identifier, no predictive value`
-
-- [ ] Write `render_full_stats(profiles, col_types)`:
-  - [ ] Only called in `mode="full"`
-  - [ ] Per-column table: mean, median, std, skew, missing %, outliers
-  - [ ] Use pandas DataFrame display for numeric summary
-  - [ ] Keep it clean — not a raw `df.describe()` dump
-
-- [ ] Write `render_divider(title)`:
-  - [ ] Reusable section separator: `━━━━━━ WARNINGS ━━━━━━`
-
-- [ ] Write `render_all(report_dict, mode)`:
-  - [ ] Master render function that calls everything in order
-  - [ ] `mode="tldr"` → banner + warnings + suggestions only
-  - [ ] `mode="full"` (default) → banner + warnings + suggestions + full stats + plots
-  - [ ] `mode="full"` with `plots=False` → same as full but skip plots
-
----
-
-## PHASE 6 — Plots (`plots.py`)
-
-> Minimal. 3 plot types only. No clutter.
-
-- [ ] Set a global style function `_set_style()` called once:
-  - [ ] No top/right spines
-  - [ ] Light grid
-  - [ ] Clean font
-  - [ ] Consistent color palette (one primary color, one accent for warnings)
-
-- [ ] Write `plot_distributions(df, col_types)`:
-  - [ ] Only NUMERIC_CONTINUOUS and NUMERIC_DISCRETE columns
-  - [ ] Histograms in a grid, max 3 per row
-  - [ ] Annotate skew value on each plot if abs(skew) > 0.5
-  - [ ] Red annotation if skew > 1, gray if between 0.5 and 1
-  - [ ] Single `plt.show()` at the end, not per subplot
-
-- [ ] Write `plot_outliers(df, col_types)`:
-  - [ ] Boxplots for all numeric columns
-  - [ ] Annotate outlier count on each box
-  - [ ] Same grid layout as distributions
-
-- [ ] Write `plot_correlation(df, col_types, high_corr_pairs)`:
-  - [ ] If numeric columns <= 15: show full heatmap, lower triangle only
-  - [ ] If numeric columns > 15: skip heatmap, show top 10 correlated pairs as a simple bar chart instead
-  - [ ] Annotate correlation values on heatmap cells
-
-- [ ] Write `plot_all(df, col_types, profiles, correlations)`:
-  - [ ] Calls the three above in order
-  - [ ] Skips any plot where there's not enough data to render it meaningfully
-
----
-
-## PHASE 7 — Core Orchestrator (`core.py`)
-
-> The conductor. Calls everything else in order.
-
-- [ ] Write `quick_eda(df, mode="full", target=None, plots=True, sample=True, sample_size=50_000, return_report=False)`:
-
-  - [ ] **Input validation**:
-    - [ ] Check `df` is a pandas DataFrame
-    - [ ] Check `df` is not empty
-    - [ ] Check at least 2 columns exist
-    - [ ] If `target` passed, check it exists in `df`
-    - [ ] Raise `ValueError` with friendly message for each failure
-
-  - [ ] **Sampling**:
-    - [ ] If `sample=True` and `len(df) > sample_size`:
-      - [ ] Sample randomly with `random_state=42`
-      - [ ] Print: `"⚡ Large dataset — running on 50,000 row sample. Pass sample=False to use full data."`
-    - [ ] If `sample=False` and df is huge → just run (user's choice)
-
-  - [ ] **Run pipeline in order**:
-    1. `classify_dataframe(df)` → col_types
-    2. `profile_dataframe(df, col_types)` → profiles
-    3. Dataset-level stats from profiles
-    4. `compute_correlations(df, col_types)` → correlations
-    5. If target: `correlate_with_target(df, target, col_types)` → target_correlations
-    6. `suggest_for_dataframe(profiles, col_types, correlations)` → col_suggestions
-    7. `get_global_suggestions(dataset_stats)` → global_suggestions
-
-  - [ ] **Build report dict** (always, regardless of mode):
-    ```python
-    report = {
-      "shape": ...,
-      "missing_pct": ...,
-      "duplicates": ...,
-      "memory_mb": ...,
-      "col_types": col_types,
-      "profiles": profiles,
-      "correlations": correlations,
-      "suggestions": col_suggestions,
-      "global_suggestions": global_suggestions,
-    }
-    ```
-
-  - [ ] **Render**:
-    - [ ] Call `render_all(report, mode=mode)`
-    - [ ] If `plots=True` and `mode != "tldr"`: call `plot_all(...)`
-
-  - [ ] **Return**:
-    - [ ] If `return_report=True` → return report dict
-    - [ ] Else → return `None` (side-effect only, like pandas `df.info()`)
-
-- [ ] Write `__init__.py`:
-  - [ ] Only export `quick_eda`
-  - [ ] Set `__version__ = "0.1.0"`
-
----
-
-## PHASE 8 — Testing & Polish
-
-- [ ] Write `tests/test_core.py`:
-  - [ ] Test with a clean DataFrame — no warnings expected
-  - [ ] Test with a messy DataFrame — all suggestion types should fire
-  - [ ] Test `return_report=True` — check dict keys exist
-  - [ ] Test `mode="tldr"` — should not error
-  - [ ] Test with `target=` column — should not error
-  - [ ] Test with empty DataFrame — should raise friendly error
-  - [ ] Test with non-DataFrame input — should raise friendly error
-  - [ ] Test with single column — should raise friendly error
-  - [ ] Test large df (>50k rows) — sampling message should print
-
-- [ ] Create `examples/demo.ipynb`:
-  - [ ] Cell 1: install + import
-  - [ ] Cell 2: load a public dataset (Titanic or similar)
-  - [ ] Cell 3: `quick_eda(df)` — show full output
-  - [ ] Cell 4: `quick_eda(df, mode="tldr")`
-  - [ ] Cell 5: `report = quick_eda(df, return_report=True)` then `report["suggestions"]`
-  - [ ] Cell 6: `quick_eda(df, target="Survived")`
-
----
-
-## PHASE 9 — Publishing to PyPI
-
-- [ ] Add `long_description` in `setup.py` pointing to README.md
-- [ ] Add `classifiers` in `setup.py`:
-  - `Programming Language :: Python :: 3`
-  - `License :: OSI Approved :: MIT License`
-  - `Topic :: Scientific/Engineering :: Information Analysis`
-- [ ] Create `pyproject.toml` (modern builds):
-  ```toml
-  [build-system]
-  requires = ["setuptools", "wheel"]
-  build-backend = "setuptools.backends.legacy:build"
-  ```
-- [ ] Register on PyPI (create account if needed)
-- [ ] Build: `python -m build`
-- [ ] Test on TestPyPI first: `twine upload --repository testpypi dist/*`
-- [ ] Install from TestPyPI and verify: `pip install -i https://test.pypi.org/simple/ quick-eda`
-- [ ] If clean: publish to real PyPI: `twine upload dist/*`
-- [ ] Verify: `pip install quick-eda` works from scratch
-
----
-
-## PHASE 10 — v0.2 Backlog (don't touch until v0.1 is on PyPI)
-
-- [ ] `target=` parameter full implementation (reorient output around target column)
-- [ ] Time series detection and line plot support for datetime-indexed DataFrames
-- [ ] HTML export: `quick_eda(df, export="report.html")`
-- [ ] `mode="full"` per-column stat table (like `df.describe()` but cleaner)
-- [ ] Automatic encoding suggestions for high-cardinality categoricals
-- [ ] CI/CD quality gate helper: `quick_eda.assert_quality(df, max_missing=0.2)`
-- [ ] Categorical plot: top-N bar chart for low-cardinality columns
-- [ ] Better sampling: stratified by target if target is passed
+# quick_eda — Full Roadmap TODO
+
+> This document tracks everything from v0.1.1 to v1.0.0.
+> Work top to bottom. Do not skip versions. Each version builds on the last.
+> Update checkboxes as you complete tasks. Commit TODO.md with every version tag.
 
 ---
 
 ## Current Status
 
-- [x] Phase 0 — Setup
-- [ ] Phase 1 — Classifier
-- [ ] Phase 2 — Profiler
-- [ ] Phase 3 — Relationships
-- [ ] Phase 4 — Suggestion Engine
-- [ ] Phase 5 — Renderer
-- [ ] Phase 6 — Plots
-- [ ] Phase 7 — Core
-- [ ] Phase 8 — Testing
-- [ ] Phase 9 — PyPI
+```
+v0.1.0   Core pipeline working, tested on real datasets, pushed to GitHub
+v0.1.1   Bug fixes 
+v0.2.0   Categorical intelligence
+v0.3.0   Target mode (full implementation)
+v0.4.0   Time series support
+v0.5.0   CLI support
+v0.6.0   AI narrative summary
+v0.7.0   Data quality scoring
+v0.8.0   HTML export + shareable reports
+v0.9.0   Performance + polish
+v1.0.0   Interactive mode + compare + full docs
+```
+
+---
+
+## v0.1.1 — Bug Fixes
+> Fix correctness issues before building anything new.
+> Nothing new gets built on broken foundations.
+
+### suggestions.py
+- [x] Guard log transform suggestion against negative-value columns
+  - Before suggesting log transform, check `profile["min"] >= 0`
+  - If min is negative → suggest `"Consider power transform (Box-Cox) — column has negative values, log transform not applicable"`
+  - Affected real-world columns: `longitude`, `temperature`, `profit_margin`, etc.
+- [x] DROP columns should suppress ALL other suggestions
+  - Currently CONSTANT returns early but NEAR_CONSTANT and ID_LIKE do not always suppress downstream checks
+  - After any DROP suggestion is added → `return suggestions` immediately
+  - A column flagged for dropping should never also get impute/skew/outlier suggestions
+
+### profiler.py
+- [x] Fix pandas deprecation warning — `select_dtypes(include=["object"])` 
+  - Replace with `select_dtypes(include=["str", "string", "object", "category"])`
+  - Affects `get_dataset_stats()`
+- [x] Fix `infer_datetime_format=True` deprecation
+  - Replace all occurrences with `format="mixed"`
+  - Check both `profiler.py` and `classifier.py`
+
+
+### tests
+- [x] Add test for log transform not suggested on negative column
+- [x] Add test for DROP suppressing all other suggestions
+- [x] Run full test suite — confirm 66/66 passing after fixes
+
+### release
+- [x] Bump version to `0.1.1` in `setup.py` and `__init__.py`
+- [ ] Commit: `FIX: v0.1.1 bug fixes — renderer, suggestions, deprecation warnings`
+- [ ] Tag: `git tag v0.1.1 && git push origin main --tags`
+
+---
+
+## v0.2.0 — Categorical Intelligence
+> Currently blind to categorical data. No plots, limited insights.
+> This version makes categorical columns first-class citizens.
+
+### classifier.py
+- [ ] Review CATEGORICAL_LOW threshold — currently 15 unique values
+  - Consider raising to 20 for wider datasets
+  - Add config option so user can override: `quick_eda(df, cat_threshold=20)`
+
+### profiler.py
+- [ ] Enhance `profile_categorical()`:
+  - [ ] Add `imbalance_ratio` — ratio of most frequent to least frequent value
+  - [ ] Add `rare_category_pct` — % of rows that belong to categories appearing < 1% of the time
+  - [ ] Add `entropy` — Shannon entropy as a uniformity measure (0 = one value, high = very spread)
+
+### suggestions.py
+- [ ] Add imbalanced category rule:
+  - If top value > 80% but < 98% (below NEAR_CONSTANT threshold) → `"Imbalanced — '{top_val}' dominates {pct}% of rows, may cause model bias"`
+- [ ] Improve high cardinality suggestions — be more specific:
+  - > 50 unique AND rare_category_pct > 20% → `"Many rare categories ({pct}% of rows) — consider grouping into 'Other'"`
+  - > 50 unique AND imbalance is low → `"High cardinality — consider frequency encoding or target encoding"`
+- [ ] Add boolean column suggestion:
+  - If True/False split is extremely imbalanced (> 95% one value) → treat like NEAR_CONSTANT
+
+### plots.py
+- [ ] Add `plot_categoricals(df, col_types)`:
+  - For every CATEGORICAL_LOW column: horizontal bar chart of top-N value counts
+  - Sort bars by frequency descending
+  - Annotate each bar with its percentage
+  - Max 3 columns per row, same grid layout as distributions
+  - Cap at top 10 values — if more exist, show "other" as a final bar
+  - Color: use accent color for the top bar, muted for the rest
+- [ ] Add `plot_boolean(df, col_types)`:
+  - For every BOOLEAN column: simple two-bar chart (True vs False counts)
+  - Annotate with percentage split
+- [ ] Update `plot_all()` to call both new functions after existing plots
+
+### renderer.py
+- [ ] Add categorical summary section to `_warnings()`:
+  - Show imbalanced categoricals under MODERATE concern
+- [ ] Add categorical section to `_full_stats()`:
+  - Table showing: column, unique count, top value, top value %, rare category %, entropy
+  - Separate from numeric stats table, not mixed in
+
+### core.py
+- [ ] Pass categorical profiles to renderer correctly
+- [ ] Ensure new plots are gated behind `plots=True` and `mode != "tldr"`
+
+### tests
+- [ ] `test_profiler.py` — test `imbalance_ratio`, `rare_category_pct`, `entropy` keys exist
+- [ ] `test_suggestions.py` — test imbalanced category rule fires correctly
+- [ ] `test_suggestions.py` — test improved high cardinality suggestions
+- [ ] `test_core.py` — test categorical plots don't error on a df with categoricals
+
+### release
+- [ ] Bump version to `0.2.0`
+- [ ] Update README — add categorical detection to "What it detects" table
+- [ ] Commit: `FEAT: v0.2.0 — categorical intelligence, plots, and suggestions`
+- [ ] Tag: `git tag v0.2.0 && git push origin main --tags`
+
+---
+
+## v0.3.0 — Target Mode (Full Implementation)
+> `target=` parameter exists but barely does anything.
+> This version makes it genuinely useful for ML workflows.
+
+### relationships.py
+- [ ] Enhance `correlate_with_target()`:
+  - [ ] Include direction — positive or negative correlation
+  - [ ] Include correlation strength label — "strong", "moderate", "weak"
+  - [ ] For categorical target: use point-biserial correlation for numeric columns
+  - [ ] For categorical columns vs target: use Cramér's V statistic
+
+### suggestions.py
+- [ ] Add target-aware suggestions:
+  - Columns with abs(correlation to target) < 0.01 → `"Near-zero correlation with target '{target}' — likely low predictive value"`
+  - Columns with abs(correlation to target) > 0.7 → `"Strong correlation with target — important feature, handle carefully"`
+- [ ] Add class balance check when target is categorical:
+  - If any class < 5% of rows → `"Class imbalance detected — '{class}' has only {pct}% of samples, consider oversampling"`
+
+### renderer.py
+- [ ] Add target correlation section to output (only when `target=` is passed):
+  ```
+  ─── FEATURE RELEVANCE (target: price) ───
+
+    strong positive   bedrooms        0.82
+    strong positive   bathrooms       0.71
+    moderate positive sqft_living     0.61
+    weak              yr_built        0.09
+    near zero         zipcode         0.01  ← low predictive value
+  ```
+- [ ] Move this section between WARNINGS and SUGGESTIONS so it's prominent
+
+### plots.py
+- [ ] Add `plot_target_correlations(correlations, target)`:
+  - Horizontal bar chart of all features ranked by abs(correlation to target)
+  - Color by direction — blue for positive, coral for negative
+  - Only shown when `target=` is passed
+- [ ] Add `plot_target_distributions(df, target, col_types)`:
+  - For numeric target: color histograms by target quartile
+  - For categorical target (classification): overlay distributions per class
+  - Only top 4 most correlated features shown
+
+### core.py
+- [ ] Pass `target` info through to renderer and plots correctly
+- [ ] Detect regression vs classification:
+  - If target has <= 10 unique values → classification mode
+  - If target is continuous → regression mode
+  - Store in report dict as `report["target_type"]`
+
+### tests
+- [ ] Test target correlation ranking is correct
+- [ ] Test classification vs regression detection
+- [ ] Test class imbalance suggestion fires
+- [ ] Test near-zero correlation suggestion fires
+- [ ] Test target section only appears when target is passed
+
+### release
+- [ ] Bump version to `0.3.0`
+- [ ] Update README — document `target=` parameter fully with examples
+- [ ] Commit: `FEAT: v0.3.0 — full target mode, feature relevance ranking`
+- [ ] Tag: `git tag v0.3.0 && git push origin main --tags`
+
+---
+
+## v0.4.0 — Time Series Support
+> Datetime columns currently just get profiled for range and monotonicity.
+> This version adds actual time series intelligence.
+
+### classifier.py
+- [ ] Add `TIME_SERIES` type — distinct from DATETIME
+  - A column is TIME_SERIES if: it's datetime AND the dataframe is indexed by it OR it's the dominant datetime column
+- [ ] Add `_is_dominant_datetime(df)` helper:
+  - Returns the name of the datetime column if there's exactly one, else None
+
+### profiler.py
+- [ ] Add `profile_timeseries(series, value_cols)` function:
+  - [ ] `frequency` — detected frequency (daily, weekly, monthly, irregular)
+  - [ ] `gaps` — count of missing time periods
+  - [ ] `gap_dates` — list of first 5 gap dates for display
+  - [ ] `trend` — "upward", "downward", "flat" based on linear regression slope
+  - [ ] `seasonality_hint` — if autocorrelation at lag 7, 12, or 52 is > 0.5, flag possible seasonality
+
+### plots.py
+- [ ] Add `plot_timeseries(df, time_col, col_types)`:
+  - Line plot for each numeric column against the time axis
+  - Highlight gaps as vertical shaded regions
+  - Show trend line overlay
+  - Only triggered when a TIME_SERIES column is detected
+
+### suggestions.py
+- [ ] Add time series specific suggestions:
+  - Gaps detected → `"Time gaps found in '{col}' — {n} missing periods, consider interpolation"`
+  - Trend detected → `"'{col}' shows a {direction} trend — consider differencing before modeling"`
+  - Seasonality hint → `"Possible seasonality detected in '{col}' — check autocorrelation at lag {lag}"`
+
+### renderer.py
+- [ ] Add time series section to output when detected:
+  ```
+  ─── TIME SERIES ───
+    time column     timestamp
+    frequency       daily
+    range           2020-01-01 → 2024-12-31  (1826 days)
+    gaps            3 missing periods
+    trend           upward
+    seasonality     possible (lag 7)
+  ```
+
+### core.py
+- [ ] Auto-detect if dataframe has time series structure before running pipeline
+- [ ] If time series detected → print `"Time series structure detected — switching to temporal analysis"`
+
+### tests
+- [ ] Test frequency detection on daily/weekly/monthly series
+- [ ] Test gap detection
+- [ ] Test trend detection
+- [ ] Test time series suggestions fire correctly
+
+### release
+- [ ] Bump version to `0.4.0`
+- [ ] Update README — add time series section
+- [ ] Commit: `FEAT: v0.4.0 — time series detection and analysis`
+- [ ] Tag: `git tag v0.4.0 && git push origin main --tags`
+
+---
+
+## v0.5.0 — CLI Support
+> Currently only works in Jupyter. This version makes it work everywhere.
+
+### setup.py
+- [ ] Add entry point:
+  ```python
+  entry_points={
+      "console_scripts": [
+          "quick-eda=quick_eda.cli:main",
+      ]
+  }
+  ```
+
+### quick_eda/cli.py (new file)
+- [ ] Create `cli.py` with `main()` function
+- [ ] Argument parsing using `argparse`:
+  - [ ] `file` — positional, path to CSV/Excel file (required)
+  - [ ] `--mode` — `full` or `tldr` (default: `full`)
+  - [ ] `--target` — column name for target mode
+  - [ ] `--no-plots` — disable plots
+  - [ ] `--output` — save HTML report to file
+  - [ ] `--sample-size` — override default 50k sample size
+  - [ ] `--no-sample` — disable sampling
+  - [ ] `--sep` — separator for CSV (default: auto-detect)
+  - [ ] `--version` — print version and exit
+- [ ] Auto file format detection:
+  - `.csv` → `pd.read_csv()`
+  - `.tsv` → `pd.read_csv(sep="\t")`
+  - `.xlsx`, `.xls` → `pd.read_excel()`
+  - `.parquet` → `pd.read_parquet()`
+  - `.json` → `pd.read_json()`
+  - Unknown extension → try CSV, fail with friendly error
+- [ ] Friendly error messages:
+  - File not found → `"File not found: {path}. Check the path and try again."`
+  - Wrong format → `"Could not read {path}. Supported formats: CSV, Excel, Parquet, JSON"`
+  - Target not found → `"Column '{target}' not found. Available columns: {list}"`
+
+### Usage after install:
+```bash
+quick-eda data.csv
+quick-eda data.csv --mode tldr
+quick-eda data.csv --target price
+quick-eda data.csv --no-plots
+quick-eda data.csv --output report.html
+quick-eda data.xlsx --target churn
+```
+
+### renderer.py
+- [ ] Detect if running in Jupyter or terminal
+  - Use `IPython.get_ipython()` — if None, we're in a terminal
+  - In terminal mode: print output as-is (already works since we use `print()`)
+  - In Jupyter mode: current behavior
+- [ ] Plots in CLI mode:
+  - If `--output` is set → save plots as PNG alongside the HTML
+  - If no output → `plt.show()` (opens a window, works in most terminals)
+
+### tests
+- [ ] Test CLI with a CSV file — no error
+- [ ] Test CLI `--mode tldr`
+- [ ] Test CLI `--target col`
+- [ ] Test CLI with non-existent file — friendly error
+- [ ] Test CLI with wrong format — friendly error
+- [ ] Test auto format detection for CSV, Excel, Parquet
+
+### release
+- [ ] Bump version to `0.5.0`
+- [ ] Update README — add CLI section with usage examples
+- [ ] Commit: `FEAT: v0.5.0 — CLI support, multi-format file loading`
+- [ ] Tag: `git tag v0.5.0 && git push origin main --tags`
+- [ ] **Publish to PyPI** — this is the first version worth publishing
+  - [ ] `python -m build`
+  - [ ] Test on TestPyPI: `twine upload --repository testpypi dist/*`
+  - [ ] Verify: `pip install -i https://test.pypi.org/simple/ quick-eda`
+  - [ ] Publish: `twine upload dist/*`
+  - [ ] Verify: `pip install quick-eda` works from scratch
+
+---
+
+## v0.6.0 — AI Narrative Summary
+> The first WOW feature. Plain English dataset summary using an LLM.
+> No raw data is ever sent — only the report dict (stats, types, suggestions).
+
+### quick_eda/ai_summary.py (new file)
+- [ ] Create `generate_summary(report: dict, api_key: str, provider: str) -> str`
+- [ ] Provider support:
+  - [ ] `"anthropic"` — uses Claude via `anthropic` SDK
+  - [ ] `"openai"` — uses GPT via `openai` SDK
+  - [ ] Auto-detect from env vars: `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+- [ ] Build the prompt from report dict — never send raw data:
+  ```
+  Dataset: {rows} rows, {cols} columns
+  Types: {numeric} numeric, {categorical} categorical, {datetime} datetime
+  Missing: {missing_pct}% overall
+  Duplicates: {duplicates}
+  Key issues: {top 5 suggestions}
+  High correlations: {correlation pairs}
+  Skewed columns: {skewed cols with skew values}
+  ...
+  ```
+- [ ] Prompt instruction: "Write 3-5 sentences in plain English describing this dataset, its main issues, and the most important first step to take. Be specific. Do not use bullet points."
+- [ ] Cache the summary in the report dict so it's not re-generated on every call
+- [ ] Token limit: max 300 tokens output — keep it short
+- [ ] Graceful fallback: if API call fails → skip summary silently, don't crash
+
+### core.py
+- [ ] Add `ai_summary=False` parameter to `quick_eda()`
+- [ ] Add `api_key=None` parameter — override env var if passed directly
+- [ ] Add `provider="auto"` parameter — auto-detect or specify
+- [ ] If `ai_summary=True`:
+  - Check for API key — if missing, print warning and skip
+  - Call `generate_summary()` after building report dict
+  - Store result in `report["ai_summary"]`
+
+### renderer.py
+- [ ] Add `_render_ai_summary(summary: str)` function:
+  - Prints at the very top, before the banner
+  - Format:
+    ```
+    ─── DATASET SUMMARY ───
+
+      This appears to be an Airbnb listings dataset for New York City with ~49k
+      properties. The price column is extremely right-skewed — a log transform is
+      strongly recommended. Two columns (id, name) are identifiers and should be
+      dropped. About 20% of reviews data is missing, likely because newer listings
+      haven't been reviewed yet.
+
+    ────────────────────────────────────────────
+    ```
+- [ ] Update `render_all()` to call `_render_ai_summary()` first if summary exists in report
+
+### requirements.txt
+- [ ] Add `anthropic>=0.20` as optional dependency
+- [ ] Add `openai>=1.0` as optional dependency
+- [ ] Mark both as optional in setup.py extras:
+  ```python
+  extras_require={
+      "ai": ["anthropic>=0.20", "openai>=1.0"],
+  }
+  ```
+- [ ] Install with: `pip install quick-eda[ai]`
+
+### tests
+- [ ] Test `generate_summary()` with a mocked API call — no real API needed in tests
+- [ ] Test `ai_summary=False` (default) — no API call made
+- [ ] Test missing API key — warning printed, no crash
+- [ ] Test failed API call — graceful fallback, no crash
+- [ ] Test summary stored in report dict when `return_report=True`
+
+### release
+- [ ] Bump version to `0.6.0`
+- [ ] Update README — add AI summary section with setup instructions
+- [ ] Commit: `FEAT: v0.6.0 — AI narrative summary (Anthropic + OpenAI)`
+- [ ] Tag: `git tag v0.6.0 && git push origin main --tags`
+- [ ] Update PyPI
+
+---
+
+## v0.7.0 — Data Quality Scoring
+> Give the dataset a score so users have one number to optimize.
+> Makes quality tangible and gamifies the cleaning process.
+
+### quick_eda/scorer.py (new file)
+- [ ] Create `compute_quality_score(dataset_stats, profiles, col_types, suggestions) -> dict`
+- [ ] Scoring formula (starts at 100, penalties deducted):
+
+  ```
+  Missing values:
+    0%          → 0 penalty
+    1-5%        → -5
+    5-10%       → -10
+    10-20%      → -20
+    > 20%       → -30
+
+  Duplicate rows:
+    0           → 0 penalty
+    > 0         → -10
+
+  Useless columns (per column):
+    CONSTANT    → -5 each (max -15)
+    NEAR_CONST  → -3 each (max -10)
+    ID_LIKE     → -3 each (max -10)
+
+  Data quality issues (per column):
+    skew > 1    → -2 each (max -10)
+    outliers > 10% → -2 each (max -10)
+    missing col > 20% → -3 each (max -15)
+
+  Bonus points:
+    0 duplicates        → +5
+    0 missing           → +5
+    no useless columns  → +5
+  ```
+
+- [ ] Return dict:
+  ```python
+  {
+    "score": 74,
+    "grade": "B",       # A=90+, B=75+, C=60+, D=45+, F=below 45
+    "penalties": [...], # list of (reason, points_lost)
+    "bonuses":   [...], # list of (reason, points_gained)
+  }
+  ```
+
+### renderer.py
+- [ ] Add score to banner:
+  ```
+    quick_eda
+  ────────────────────────────────────────────────────
+    rows          3,204       quality score   74/100 B
+    columns          14
+  ```
+- [ ] Color code the score:
+  - 90+  → green
+  - 75+  → yellow
+  - 60+  → orange
+  - below → red
+  - (use unicode characters since we're plain text: no actual colors)
+  - Instead use: `[A]`, `[B]`, `[C]`, `[D]`, `[F]` grade labels
+
+### quick_eda/assert_quality.py (new file)
+- [ ] Create `assert_quality(df, min_score=70, max_missing=None, max_duplicates=None)`:
+  - Runs the full pipeline silently (no display)
+  - Raises `DataQualityError` if any threshold is violated
+  - `DataQualityError` message lists exactly which checks failed
+  - Perfect for CI/CD:
+    ```python
+    # in your data pipeline
+    from quick_eda import assert_quality
+    assert_quality(df, min_score=80, max_missing=0.1)
+    # raises if score < 80 or missing > 10%
+    ```
+- [ ] Create custom `DataQualityError(Exception)` class in `exceptions.py`
+
+### tests
+- [ ] Test scoring on a clean df — should be near 100
+- [ ] Test scoring on a messy df — should be low
+- [ ] Test each penalty fires correctly
+- [ ] Test bonus points fire correctly
+- [ ] Test grade labels are correct
+- [ ] Test `assert_quality` passes on clean df
+- [ ] Test `assert_quality` raises on messy df
+- [ ] Test `assert_quality` error message is informative
+
+### release
+- [ ] Bump version to `0.7.0`
+- [ ] Update README — add quality score section and `assert_quality` docs
+- [ ] Commit: `FEAT: v0.7.0 — data quality scoring and assert_quality`
+- [ ] Tag: `git tag v0.7.0 && git push origin main --tags`
+- [ ] Update PyPI
+
+---
+
+## v0.8.0 — HTML Export + Shareable Reports
+> For non-technical users who need to share findings with stakeholders.
+> One file, self-contained, opens in any browser.
+
+### quick_eda/exporter.py (new file)
+- [ ] Create `export_html(report, plots, output_path)` function
+- [ ] HTML structure:
+  - [ ] Header with dataset name (from filename if available) and generation timestamp
+  - [ ] AI summary section at top (if present in report)
+  - [ ] Quality score badge
+  - [ ] Summary banner (rows, cols, missing, duplicates, memory)
+  - [ ] Warnings table
+  - [ ] Suggestions numbered list
+  - [ ] Column stats table
+  - [ ] All plots embedded as base64 PNG — no external dependencies
+  - [ ] Footer with quick_eda version
+- [ ] Self-contained — single `.html` file, no CSS/JS files needed
+- [ ] Mobile-friendly layout — readable on phone
+- [ ] Dark/light theme toggle button
+- [ ] File size target: under 2MB for typical datasets
+
+### core.py
+- [ ] Add `export=None` parameter to `quick_eda()`
+- [ ] If `export="report.html"` → call `export_html()` after rendering
+- [ ] Print confirmation: `"✓ Report saved to report.html"`
+
+### cli.py
+- [ ] `--output report.html` → passes to `export=` parameter
+
+### tests
+- [ ] Test HTML file is created at specified path
+- [ ] Test HTML file is valid (contains expected sections)
+- [ ] Test plots are embedded (file size > baseline)
+- [ ] Test with `ai_summary=True` — summary appears in HTML
+
+### release
+- [ ] Bump version to `0.8.0`
+- [ ] Update README — add HTML export section with screenshot
+- [ ] Commit: `FEAT: v0.8.0 — HTML export and shareable reports`
+- [ ] Tag: `git tag v0.8.0 && git push origin main --tags`
+- [ ] Update PyPI
+
+---
+
+## v0.9.0 — Performance + Polish
+> Before v1.0.0 everything must be fast, solid, and production-ready.
+> No new features. Only hardening, speed, and cleanup.
+
+### Performance
+- [ ] Parallel column profiling using `concurrent.futures.ThreadPoolExecutor`:
+  - Profile all columns in parallel instead of sequentially
+  - Significant speedup on wide datasets (50+ columns)
+  - Add `n_jobs=-1` parameter to use all available cores
+  - Benchmark: measure time on a 100-column dataset before and after
+- [ ] Progress bar for large datasets using `tqdm`:
+  - `Profiling columns ━━━━━━━━━━ 100% | 50/50 [0.8s]`
+  - Only shown when dataset > 10k rows
+  - Add `progress=True` parameter (default True, set False to disable)
+- [ ] Memory-efficient mode for very large files:
+  - Add `chunksize` parameter for CSV reading
+  - When `chunksize` is set, profile in chunks and aggregate
+
+### Edge case hardening
+- [ ] All-null DataFrame → friendly error
+- [ ] Single-row DataFrame → friendly warning, still runs
+- [ ] Single-column DataFrame → already raises, make message clearer
+- [ ] Unicode column names → test and fix if broken
+- [ ] Column names with spaces → test and fix if broken
+- [ ] Columns named `index` or `level_0` → test and fix if broken
+- [ ] DataFrame with all-identical rows → test duplicate detection
+- [ ] DataFrame with mixed types in a column → handle gracefully
+- [ ] Very wide DataFrame (500+ columns) → test performance, add warning if > 200 cols
+
+### Code quality
+- [ ] Remove all `# type: ignore` comments and fix typing properly
+- [ ] Add type hints to all public functions
+- [ ] Docstrings on every public function — numpy style
+- [ ] Remove dead code — the old datetime sniff block that was left in classifier
+- [ ] Consistent naming — audit all variable names for clarity
+- [ ] No bare `except:` clauses — always catch specific exceptions
+
+### Testing
+- [ ] Achieve 90%+ test coverage — run `pytest --cov=quick_eda`
+- [ ] Add edge case tests for all items above
+- [ ] Add performance test — assert `quick_eda(df)` completes in < 5s on 50k rows
+- [ ] Add regression tests — save expected output and assert it doesn't change
+- [ ] Test on Python 3.9, 3.10, 3.11, 3.12, 3.14 — add GitHub Actions matrix
+
+### GitHub Actions CI
+- [ ] Create `.github/workflows/tests.yml`:
+  ```yaml
+  on: [push, pull_request]
+  jobs:
+    test:
+      runs-on: ubuntu-latest
+      strategy:
+        matrix:
+          python-version: ["3.9", "3.10", "3.11", "3.12"]
+      steps:
+        - uses: actions/checkout@v3
+        - uses: actions/setup-python@v4
+        - run: pip install -e ".[dev]"
+        - run: pytest tests/ --cov=quick_eda
+  ```
+- [ ] Add passing badge to README: `![Tests](https://github.com/GodXSpell/AutoEDA/actions/workflows/tests.yml/badge.svg)`
+
+### CHANGELOG.md
+- [ ] Create `CHANGELOG.md` and document every version from v0.1.0 to v0.9.0
+- [ ] Format:
+  ```markdown
+  ## [0.9.0] - 2025-XX-XX
+  ### Added
+  - Parallel column profiling
+  - Progress bar for large datasets
+  ### Fixed
+  - Edge case: all-null DataFrame
+  ```
+
+### release
+- [ ] Bump version to `0.9.0`
+- [ ] Update README — add CI badge, performance benchmarks
+- [ ] Commit: `FEAT: v0.9.0 — performance, polish, CI, 90% test coverage`
+- [ ] Tag: `git tag v0.9.0 && git push origin main --tags`
+- [ ] Update PyPI
+
+---
+
+## v1.0.0 — The Complete Package
+> This is the release. Everything is solid, tested, documented.
+> The two additions that make it a genuine 1.0.
+
+### Interactive mode (WOW feature #2)
+- [ ] Add `interactive=True` parameter to `quick_eda()`
+- [ ] When `interactive=True`, use Plotly instead of matplotlib:
+  - [ ] Histograms → Plotly histogram with hover showing exact count and range
+  - [ ] Boxplots → Plotly box with hover showing all IQR stats
+  - [ ] Correlation heatmap → Plotly heatmap, hover shows exact correlation value
+  - [ ] Categorical bars → Plotly bar with hover showing exact count and %
+- [ ] Clicking a histogram bar → shows the rows in that bin (as a small table)
+- [ ] Clicking a heatmap cell → shows scatter plot of that pair inline
+- [ ] Add `plotly>=5.0` as optional dependency:
+  ```
+  pip install quick-eda[interactive]
+  ```
+- [ ] Falls back to matplotlib gracefully if plotly not installed
+
+### `quick_eda.compare()` (WOW feature #3)
+- [ ] Create `compare(df_before, df_after, title_before="before", title_after="after")`
+- [ ] Shows side-by-side comparison of two versions of a dataset:
+  - Missing % before vs after — did cleaning help?
+  - Duplicate count before vs after
+  - Quality score before vs after
+  - Distribution changes for numeric columns — overlay histograms
+  - Which columns were added or removed
+  - Which suggestions from `df_before` are now resolved in `df_after`
+- [ ] Output:
+  ```
+  ─── COMPARISON ───
+
+    quality score    62/100 → 89/100  (+27)
+    missing %         11.4% → 2.1%    (improved)
+    duplicates           23 → 0        (resolved)
+    columns              14 → 12       (2 dropped)
+
+  RESOLVED
+    ✓ user_id dropped
+    ✓ duplicate rows removed
+    ✓ income imputed
+
+  REMAINING
+    ✗ income still skewed (skew 2.1)
+  ```
+
+### Documentation site
+- [ ] Set up GitHub Pages or ReadTheDocs
+- [ ] Pages:
+  - [ ] Getting started — install + first run in 2 minutes
+  - [ ] API reference — every parameter documented with types and examples
+  - [ ] Tutorials:
+    - [ ] Basic EDA walkthrough (Titanic dataset)
+    - [ ] ML prep workflow (House Prices dataset)
+    - [ ] CI/CD integration (assert_quality in GitHub Actions)
+    - [ ] AI summary setup
+  - [ ] Changelog
+- [ ] Link docs from README badge
+
+### Final PyPI release
+- [ ] Audit `setup.py` — all metadata correct
+- [ ] Ensure `pip install quick-eda` installs cleanly on Python 3.9-3.14
+- [ ] Ensure `pip install quick-eda[ai]` installs AI dependencies
+- [ ] Ensure `pip install quick-eda[interactive]` installs Plotly
+- [ ] Update PyPI description and screenshots
+
+### README final update
+- [ ] Update "What you get" section with actual screenshot from notebook
+- [ ] Update author section with real name
+- [ ] Add documentation badge
+- [ ] Add CI badge
+- [ ] Add PyPI download count badge
+- [ ] Update comparison table — add interactive mode row
+
+### release
+- [ ] Bump version to `1.0.0`
+- [ ] Full CHANGELOG.md review
+- [ ] Commit: `RELEASE: v1.0.0 — interactive mode, compare(), full documentation`
+- [ ] Tag: `git tag v1.0.0 && git push origin main --tags`
+- [ ] Create GitHub Release with full release notes
+- [ ] Announce on LinkedIn / Twitter / Reddit r/learnpython r/datascience
+
+---
+
+## Version Summary
+
+| Version | Theme | Key deliverable |
+|---------|-------|----------------|
+| v0.1.0 | ✅ Core | Pipeline working, tested on real datasets |
+| v0.1.1 | 🔧 Fixes | Renderer bugs, suggestion guards, dep warnings |
+| v0.2.0 | 📊 Categorical | Bar charts, imbalance detection, entropy |
+| v0.3.0 | 🎯 Target | Feature relevance, class balance, ranked correlations |
+| v0.4.0 | 📈 Time series | Line plots, gaps, trend, seasonality |
+| v0.5.0 | 💻 CLI | `quick-eda data.csv`, multi-format, PyPI publish |
+| v0.6.0 | 🤖 AI summary | Plain English narrative, Anthropic + OpenAI |
+| v0.7.0 | 🏆 Scoring | Quality score, grades, `assert_quality()` |
+| v0.8.0 | 📄 Export | Self-contained HTML report |
+| v0.9.0 | ⚡ Polish | Parallel profiling, CI, 90% coverage |
+| v1.0.0 | 🚀 Launch | Interactive Plotly, `compare()`, docs site |

@@ -77,21 +77,27 @@ def profile_datetime(series: pd.Series) -> dict:
     n_total  = len(series)
     non_null = series.dropna()
 
-    # try parsing if stored as string
-    if series.dtype == object:
+    # always parse to datetime regardless of stored dtype
+    try:
+        parsed = pd.to_datetime(non_null, format="mixed", errors="raise")
+    except Exception:
         try:
-            non_null = pd.to_datetime(non_null, infer_datetime_format=True)
+            parsed = pd.to_datetime(non_null, format="mixed", errors="coerce")
+            parsed = parsed.dropna()
         except Exception:
             return {"error": "Could not parse as datetime"}
 
+    if len(parsed) == 0:
+        return {"error": "No valid dates found"}
+
     return {
-        "count":        int(non_null.count()),
+        "count":        int(parsed.count()),
         "missing":      int(series.isnull().sum()),
         "missing_pct":  round(series.isnull().sum() / n_total * 100, 1),
-        "min_date":     str(non_null.min()),
-        "max_date":     str(non_null.max()),
-        "range_days":   (non_null.max() - non_null.min()).days,
-        "is_monotonic": bool(non_null.is_monotonic_increasing),
+        "min_date":     str(parsed.min()),
+        "max_date":     str(parsed.max()),
+        "range_days":   (parsed.max() - parsed.min()).days,
+        "is_monotonic": bool(parsed.is_monotonic_increasing),
     }
 
 
@@ -147,6 +153,6 @@ def get_dataset_stats(df: pd.DataFrame) -> dict:
         "duplicate_rows":  int(df.duplicated().sum()),
         "memory_mb":       round(df.memory_usage(deep=True).sum() / 1e6, 2),
         "numeric_cols":    int((df.select_dtypes(include="number")).shape[1]),
-        "categorical_cols": int((df.select_dtypes(include=["str", "string", "category", "bool"])).shape[1]),
+        "categorical_cols": int((df.select_dtypes(include=["str", "string", "object", "category"])).shape[1]),
         "datetime_cols":   int((df.select_dtypes(include="datetime")).shape[1]),
     }

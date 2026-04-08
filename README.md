@@ -299,7 +299,5 @@ Contributions welcome. Please open an issue before starting any major work so we
 MIT — do whatever you want with it.
 
 ---
-
 ## Author
-
-Built by someone tired of waiting 2 minutes for a profiling report on a 10k row dataset.
+Built by [Tarunpreet Singh](https://github.com/GodXSpell)

@@ -45,6 +45,7 @@ def suggest_for_column(
 
     if missing_pct > 50:
         suggestions.append(f"Consider dropping — {missing_pct}% of values are missing")
+        return suggestions
 
     elif missing_pct > 20:
         suggestions.append(f"Impute with care — {missing_pct}% missing, high enough to introduce bias")
@@ -69,9 +70,14 @@ def suggest_for_column(
         skew = profile.get("skew", 0)
         if abs(skew) > 1.0:
             direction = "right" if skew > 0 else "left"
-            suggestions.append(
-                f"Apply log transform — {direction}-skewed distribution (skew {skew:+.2f})"
-            )
+            if profile.get("min", 0) >= 0:
+                suggestions.append(
+                    f"Apply log transform — {direction}-skewed distribution (skew {skew:+.2f})"
+                )
+            else:
+                suggestions.append(
+                    f"Consider power transform (Box-Cox) — column has negative values, log transform not applicable"
+                )
         elif abs(skew) > 0.5:
             suggestions.append(f"Mildly skewed (skew {skew:+.2f}) — monitor, may not need transformation")
 
