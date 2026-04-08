@@ -24,98 +24,63 @@ v1.0.0   Interactive mode + compare + full docs
 
 ---
 
-## v0.1.1 — Bug Fixes
-> Fix correctness issues before building anything new.
-> Nothing new gets built on broken foundations.
-
-### suggestions.py
-- [x] Guard log transform suggestion against negative-value columns
-  - Before suggesting log transform, check `profile["min"] >= 0`
-  - If min is negative → suggest `"Consider power transform (Box-Cox) — column has negative values, log transform not applicable"`
-  - Affected real-world columns: `longitude`, `temperature`, `profit_margin`, etc.
-- [x] DROP columns should suppress ALL other suggestions
-  - Currently CONSTANT returns early but NEAR_CONSTANT and ID_LIKE do not always suppress downstream checks
-  - After any DROP suggestion is added → `return suggestions` immediately
-  - A column flagged for dropping should never also get impute/skew/outlier suggestions
-
-### profiler.py
-- [x] Fix pandas deprecation warning — `select_dtypes(include=["object"])` 
-  - Replace with `select_dtypes(include=["str", "string", "object", "category"])`
-  - Affects `get_dataset_stats()`
-- [x] Fix `infer_datetime_format=True` deprecation
-  - Replace all occurrences with `format="mixed"`
-  - Check both `profiler.py` and `classifier.py`
-
-
-### tests
-- [x] Add test for log transform not suggested on negative column
-- [x] Add test for DROP suppressing all other suggestions
-- [x] Run full test suite — confirm 66/66 passing after fixes
-
-### release
-- [x] Bump version to `0.1.1` in `setup.py` and `__init__.py`
-- [ ] Commit: `FIX: v0.1.1 bug fixes — renderer, suggestions, deprecation warnings`
-- [ ] Tag: `git tag v0.1.1 && git push origin main --tags`
-
----
-
 ## v0.2.0 — Categorical Intelligence
 > Currently blind to categorical data. No plots, limited insights.
 > This version makes categorical columns first-class citizens.
 
 ### classifier.py
-- [ ] Review CATEGORICAL_LOW threshold — currently 15 unique values
+- [x] Review CATEGORICAL_LOW threshold — currently 15 unique values
   - Consider raising to 20 for wider datasets
   - Add config option so user can override: `quick_eda(df, cat_threshold=20)`
 
 ### profiler.py
-- [ ] Enhance `profile_categorical()`:
-  - [ ] Add `imbalance_ratio` — ratio of most frequent to least frequent value
-  - [ ] Add `rare_category_pct` — % of rows that belong to categories appearing < 1% of the time
-  - [ ] Add `entropy` — Shannon entropy as a uniformity measure (0 = one value, high = very spread)
+- [x] Enhance `profile_categorical()`:
+  - [x] Add `imbalance_ratio` — ratio of most frequent to least frequent value
+  - [x] Add `rare_category_pct` — % of rows that belong to categories appearing < 1% of the time
+  - [x] Add `entropy` — Shannon entropy as a uniformity measure (0 = one value, high = very spread)
 
 ### suggestions.py
-- [ ] Add imbalanced category rule:
+- [x] Add imbalanced category rule:
   - If top value > 80% but < 98% (below NEAR_CONSTANT threshold) → `"Imbalanced — '{top_val}' dominates {pct}% of rows, may cause model bias"`
-- [ ] Improve high cardinality suggestions — be more specific:
+- [x] Improve high cardinality suggestions — be more specific:
   - > 50 unique AND rare_category_pct > 20% → `"Many rare categories ({pct}% of rows) — consider grouping into 'Other'"`
   - > 50 unique AND imbalance is low → `"High cardinality — consider frequency encoding or target encoding"`
-- [ ] Add boolean column suggestion:
+- [x] Add boolean column suggestion:
   - If True/False split is extremely imbalanced (> 95% one value) → treat like NEAR_CONSTANT
 
 ### plots.py
-- [ ] Add `plot_categoricals(df, col_types)`:
+- [x] Add `plot_categoricals(df, col_types)`:
   - For every CATEGORICAL_LOW column: horizontal bar chart of top-N value counts
   - Sort bars by frequency descending
   - Annotate each bar with its percentage
   - Max 3 columns per row, same grid layout as distributions
   - Cap at top 10 values — if more exist, show "other" as a final bar
   - Color: use accent color for the top bar, muted for the rest
-- [ ] Add `plot_boolean(df, col_types)`:
+- [x] Add `plot_boolean(df, col_types)`:
   - For every BOOLEAN column: simple two-bar chart (True vs False counts)
   - Annotate with percentage split
-- [ ] Update `plot_all()` to call both new functions after existing plots
+- [x] Update `plot_all()` to call both new functions after existing plots
 
 ### renderer.py
-- [ ] Add categorical summary section to `_warnings()`:
+- [x] Add categorical summary section to `_warnings()`:
   - Show imbalanced categoricals under MODERATE concern
-- [ ] Add categorical section to `_full_stats()`:
+- [x] Add categorical section to `_full_stats()`:
   - Table showing: column, unique count, top value, top value %, rare category %, entropy
   - Separate from numeric stats table, not mixed in
 
 ### core.py
-- [ ] Pass categorical profiles to renderer correctly
-- [ ] Ensure new plots are gated behind `plots=True` and `mode != "tldr"`
+- [x] Pass categorical profiles to renderer correctly
+- [x] Ensure new plots are gated behind `plots=True` and `mode != "tldr"`
 
 ### tests
-- [ ] `test_profiler.py` — test `imbalance_ratio`, `rare_category_pct`, `entropy` keys exist
-- [ ] `test_suggestions.py` — test imbalanced category rule fires correctly
-- [ ] `test_suggestions.py` — test improved high cardinality suggestions
-- [ ] `test_core.py` — test categorical plots don't error on a df with categoricals
+- [x] `test_profiler.py` — test `imbalance_ratio`, `rare_category_pct`, `entropy` keys exist
+- [x] `test_suggestions.py` — test imbalanced category rule fires correctly
+- [x] `test_suggestions.py` — test improved high cardinality suggestions
+- [x] `test_core.py` — test categorical plots don't error on a df with categoricals
 
 ### release
-- [ ] Bump version to `0.2.0`
-- [ ] Update README — add categorical detection to "What it detects" table
+- [x] Bump version to `0.2.0`
+- [x] Update README — add categorical detection to "What it detects" table
 - [ ] Commit: `FEAT: v0.2.0 — categorical intelligence, plots, and suggestions`
 - [ ] Tag: `git tag v0.2.0 && git push origin main --tags`
 

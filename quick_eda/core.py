@@ -15,6 +15,7 @@ def quick_eda(
     sample       = True,
     sample_size  = 50_000,
     return_report= False,
+    cat_threshold= 20,
 ):
     """
     Run a minimal EDA report inline in Jupyter.
@@ -28,6 +29,7 @@ def quick_eda(
     sample        : auto-sample large datasets (default True)
     sample_size   : row limit when sampling (default 50,000)
     return_report : return the report as a dict (default False)
+    cat_threshold : max uniques to be considered low-cardinality categorical (default 20)
 
     Examples
     --------
@@ -78,7 +80,7 @@ def quick_eda(
     # ── pipeline ───────────────────────────────────────────────────────────
 
     # step 1 — classify columns
-    col_types = classify_dataframe(working_df)
+    col_types = classify_dataframe(working_df, cat_threshold)
 
     # step 2 — profile columns + dataset stats
     profiles      = profile_dataframe(working_df, col_types)

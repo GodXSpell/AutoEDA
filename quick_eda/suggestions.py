@@ -35,6 +35,15 @@ def suggest_for_column(
         suggestions.append(f"Consider dropping — near-constant, one value dominates {100 - missing:.0f}% of rows")
         return suggestions
 
+    if col_type == BOOLEAN:
+        top_values = profile.get("top_values", {})
+        if top_values:
+            top_val = max(top_values, key=top_values.get)
+            top_pct = top_values[top_val]
+            if top_pct > 95:
+                suggestions.append(f"Consider dropping — near-constant, one value dominates {top_pct:.0f}% of rows")
+                return suggestions
+
     if col_type == ID_LIKE:
         suggestions.append("Drop before modeling — appears to be a unique row identifier")
         return suggestions
@@ -99,9 +108,29 @@ def suggest_for_column(
 
     if col_type == CATEGORICAL_HIGH:
         unique_count = profile.get("unique_count", 0)
-        suggestions.append(
-            f"High cardinality ({unique_count} unique values) — consider grouping rare categories or target encoding"
-        )
+        rare_pct = profile.get("rare_category_pct", 0)
+        imbalance = profile.get("imbalance_ratio", 0)
+
+        if unique_count > 50 and rare_pct > 20:
+            suggestions.append(
+                f"Many rare categories ({rare_pct}% of rows) — consider grouping into 'Other'"
+            )
+        elif unique_count > 50 and imbalance < 10:
+            suggestions.append(
+                "High cardinality — consider frequency encoding or target encoding"
+            )
+        else:
+            suggestions.append(
+                f"High cardinality ({unique_count} unique values) — consider grouping rare categories or target encoding"
+            )
+
+    if col_type in (CATEGORICAL_LOW, CATEGORICAL_HIGH):
+        top_values = profile.get("top_values", {})
+        if top_values:
+            top_val = max(top_values, key=top_values.get)
+            top_pct = top_values[top_val]
+            if 80 < top_pct < 98:
+                suggestions.append(f"Imbalanced — '{top_val}' dominates {top_pct:.0f}% of rows, may cause model bias")
 
     # ── Priority 4: INFO ──────────────────────────────────────────────────
 

@@ -63,6 +63,9 @@ def test_profile_categorical_keys():
     assert "missing_pct"  in result
     assert "unique_count" in result
     assert "top_values"   in result
+    assert "imbalance_ratio" in result
+    assert "rare_category_pct" in result
+    assert "entropy"      in result
 
 def test_profile_categorical_top_values():
     s      = pd.Series(["a"] * 60 + ["b"] * 30 + ["c"] * 10)

@@ -92,9 +92,19 @@ def test_clean_column_no_suggestions():
     assert result == []
 
 def test_high_cardinality_suggestion():
-    profile = {"missing_pct": 0, "unique_count": 200}
+    profile = {"missing_pct": 0, "unique_count": 200, "rare_category_pct": 25}
     result  = suggest_for_column("col", CATEGORICAL_HIGH, profile, [])
-    assert any("cardinality" in s.lower() for s in result)
+    assert any("Many rare categories" in s for s in result)
+
+def test_high_cardinality_low_imbalance():
+    profile = {"missing_pct": 0, "unique_count": 200, "rare_category_pct": 10, "imbalance_ratio": 5}
+    result  = suggest_for_column("col", CATEGORICAL_HIGH, profile, [])
+    assert any("consider frequency encoding" in s for s in result)
+
+def test_imbalanced_category_suggestion():
+    profile = {"missing_pct": 0, "top_values": {"a": 90}}
+    result  = suggest_for_column("col", CATEGORICAL_LOW, profile, [])
+    assert any("Imbalanced" in s for s in result)
 
 
 # ── suggest_for_dataframe ──────────────────────────────────────────────────

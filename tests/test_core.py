@@ -139,3 +139,13 @@ def test_target_correlations_ranked(clean_df):
     tc     = report["target_correlations"]
     if len(tc) > 1:
         assert abs(tc[0][1]) >= abs(tc[1][1])
+
+def test_categorical_plots_no_error():
+    import pandas as pd
+    from quick_eda.core import quick_eda
+    df = pd.DataFrame({
+        "cat_col": ["a", "b", "a", "c", "b", "a", "d", "e", "f", "g", "h"],
+        "bool_col": [True, False, True, True, False, False, True, False, True, False, True],
+        "num": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+    })
+    quick_eda(df, mode="full", plots=True, return_report=False)

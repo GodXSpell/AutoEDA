@@ -53,20 +53,37 @@ def profile_categorical(series: pd.Series) -> dict:
     Compute stats for a categorical or boolean column.
     """
     n_total   = len(series)
+    
+    value_counts_normalize = series.value_counts(normalize=True, dropna=True)
     top_values = (
-        series.value_counts(normalize=True, dropna=True)
+        value_counts_normalize
         .head(5)
         .mul(100)
         .round(1)
         .to_dict()
     )
+    
+    if not value_counts_normalize.empty:
+        imbalance_ratio = round(float(value_counts_normalize.iloc[0] / value_counts_normalize.iloc[-1]), 1)
+        rare_category_pct = round(float(value_counts_normalize[value_counts_normalize < 0.01].sum() * 100), 1)
+        
+        # Compute Shannon entropy
+        entropy = -np.sum(value_counts_normalize * np.log2(value_counts_normalize + 1e-9))
+        entropy = round(float(entropy), 2)
+    else:
+        imbalance_ratio = 0.0
+        rare_category_pct = 0.0
+        entropy = 0.0
 
     return {
-        "count":        int(series.count()),
-        "missing":      int(series.isnull().sum()),
-        "missing_pct":  round(series.isnull().sum() / n_total * 100, 1),
-        "unique_count": int(series.nunique()),
-        "top_values":   top_values,   # {value: pct_frequency}
+        "count":             int(series.count()),
+        "missing":           int(series.isnull().sum()),
+        "missing_pct":       round(series.isnull().sum() / n_total * 100, 1) if n_total > 0 else 0.0,
+        "unique_count":      int(series.nunique()),
+        "top_values":        top_values,   # {value: pct_frequency}
+        "imbalance_ratio":   imbalance_ratio,
+        "rare_category_pct": rare_category_pct,
+        "entropy":           entropy,
     }
 
 

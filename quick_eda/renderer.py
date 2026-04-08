@@ -114,36 +114,60 @@ def _suggestions(col_suggestions: dict, global_suggestions: list):
 
 def _full_stats(profiles: dict, col_types: dict):
     numeric_types = (NUMERIC_CONTINUOUS, NUMERIC_DISCRETE)
-    rows = []
+    cat_types = (CATEGORICAL_LOW, CATEGORICAL_HIGH, BOOLEAN)
+    num_rows = []
+    cat_rows = []
 
     for col, profile in profiles.items():
-        if col_types.get(col) not in numeric_types:
-            continue
         if profile.get("skipped"):
             continue
-        rows.append({
-            "column":     col,
-            "count":      profile.get("count"),
-            "missing %":  profile.get("missing_pct"),
-            "mean":       profile.get("mean"),
-            "median":     profile.get("median"),
-            "std":        profile.get("std"),
-            "min":        profile.get("min"),
-            "max":        profile.get("max"),
-            "skew":       profile.get("skew"),
-            "outliers %": profile.get("outlier_pct"),
-        })
+        c_type = col_types.get(col)
+        if c_type in numeric_types:
+            num_rows.append({
+                "column":     col,
+                "count":      profile.get("count"),
+                "missing %":  profile.get("missing_pct"),
+                "mean":       profile.get("mean"),
+                "median":     profile.get("median"),
+                "std":        profile.get("std"),
+                "min":        profile.get("min"),
+                "max":        profile.get("max"),
+                "skew":       profile.get("skew"),
+                "outliers %": profile.get("outlier_pct"),
+            })
+        elif c_type in cat_types:
+            top_values = profile.get("top_values", {})
+            top_val = next(iter(top_values.keys())) if top_values else None
+            top_pct = top_values.get(top_val, 0) if top_values else 0
+            cat_rows.append({
+                "column":       col,
+                "unique count": profile.get("unique_count"),
+                "top value":    top_val,
+                "top value %":  top_pct,
+                "rare category %": profile.get("rare_category_pct", 0),
+                "entropy":      profile.get("entropy", 0),
+            })
 
-    if not rows:
-        print("  No numeric columns to display.")
+    if num_rows:
+        print()
+        print("  NUMERIC STATS")
+        print()
+        stats_df = pd.DataFrame(num_rows).set_index("column")
+        print(stats_df.to_string())
+        print()
+
+    if cat_rows:
+        print()
+        print("  CATEGORICAL STATS")
+        print()
+        cat_df = pd.DataFrame(cat_rows).set_index("column")
+        print(cat_df.to_string())
+        print()
+
+    if not num_rows and not cat_rows:
+        print("  No columns to display.")
         print()
         return
-
-    # print("  COLUMN STATS")
-    print()
-    stats_df = pd.DataFrame(rows).set_index("column")
-    print(stats_df.to_string())
-    print()
 
 
 def render_all(report: dict, mode: str = "full"):

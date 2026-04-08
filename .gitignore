@@ -25,4 +25,5 @@ ENV/
 .idea/
 
 # .md files to ignore
-TODO.md
+*.md
+!README.md  

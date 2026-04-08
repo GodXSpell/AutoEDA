@@ -131,6 +131,8 @@ quick_eda(df, sample=False)
 | High skew | abs(skew) > 1.0 | Log transform or Box-Cox |
 | Outliers | IQR method, > 10% of rows | Investigate |
 | High cardinality | Categorical with > 50 unique values | Group rare categories |
+| Rare categories | Categories appearing < 5% | Group into 'Other' |
+| Categorical imbalance | Top category > 80% of rows | May cause model bias |
 | High correlation | abs(r) ≥ 0.85 with another column | Consider dropping one |
 | Duplicate column | Identical values to another column | Drop |
 

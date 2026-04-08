@@ -230,11 +230,96 @@ def plot_all(df: pd.DataFrame, col_types: dict, correlations: list):
     Runs all three plots in order.
     Skips any plot where there's not enough data.
     """
-    num_cols = _get_numeric_cols(df, col_types)
-
-    if not num_cols:
-        return
-
     plot_distributions(df, col_types)
     plot_outliers(df, col_types)
     plot_correlation(df, col_types, correlations)
+    plot_categoricals(df, col_types)
+    plot_boolean(df, col_types)
+
+def plot_categoricals(df: pd.DataFrame, col_types: dict):
+    """
+    Horizontal bar chart of top-N value counts for CATEGORICAL_LOW.
+    """
+    from .classifier import CATEGORICAL_LOW
+    cat_cols = [col for col, t in col_types.items() if t == CATEGORICAL_LOW and col in df.columns]
+    if not cat_cols:
+        return
+
+    _set_style()
+    rows, cols = _make_grid(len(cat_cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 3))
+
+    if rows * cols == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten().tolist()
+
+    for ax, col in zip(axes, cat_cols):
+        data = df[col].value_counts(dropna=False).head(10)
+        
+        # Calculate percentages
+        total = len(df[col])
+        pcts = (data / total * 100).round(1)
+
+        # Plot bars
+        bars = ax.barh(data.index.astype(str)[::-1], data.values[::-1], color=MUTED)
+        if len(bars) > 0:
+            bars[-1].set_color(ACCENT)  # highlight top bar
+
+        for bar, pct in zip(bars, pcts.values[::-1]):
+            ax.annotate(f"{pct}%", xy=(bar.get_width(), bar.get_y() + bar.get_height() / 2),
+                        xytext=(3, 0), textcoords="offset points", ha="left", va="center", fontsize=8)
+
+        ax.set_title(col)
+        ax.spines['left'].set_visible(False)
+        ax.tick_params(axis='y', left=False)
+
+    for ax in axes[len(cat_cols):]:
+        ax.set_visible(False)
+
+    fig.suptitle("Categorical Counts (Top 10)", fontsize=13, fontweight="bold", y=1.01)
+    plt.tight_layout()
+    plt.show()
+
+def plot_boolean(df: pd.DataFrame, col_types: dict):
+    """
+    Simple two-bar chart for BOOLEAN columns.
+    """
+    from .classifier import BOOLEAN
+    bool_cols = [col for col, t in col_types.items() if t == BOOLEAN and col in df.columns]
+    if not bool_cols:
+        return
+
+    _set_style()
+    rows, cols = _make_grid(len(bool_cols))
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 4, rows * 3))
+
+    if rows * cols == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten().tolist()
+
+    for ax, col in zip(axes, bool_cols):
+        data = df[col].value_counts(dropna=False)
+        
+        total = len(df[col])
+        pcts = (data / total * 100).round(1)
+        
+        bars = ax.bar(data.index.astype(str), data.values, color=MUTED)
+        if len(bars) > 0:
+            bars[0].set_color(ACCENT)
+
+        for bar, pct in zip(bars, pcts.values):
+            ax.annotate(f"{pct}%", xy=(bar.get_x() + bar.get_width() / 2, bar.get_height()),
+                        xytext=(0, 3), textcoords="offset points", ha="center", va="bottom", fontsize=8)
+
+        ax.set_title(col)
+        ax.spines['bottom'].set_visible(False)
+        ax.tick_params(axis='x', bottom=False)
+
+    for ax in axes[len(bool_cols):]:
+        ax.set_visible(False)
+
+    fig.suptitle("Boolean Distributions", fontsize=13, fontweight="bold", y=1.01)
+    plt.tight_layout()
+    plt.show()

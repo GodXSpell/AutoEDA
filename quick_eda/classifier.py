@@ -39,7 +39,7 @@ def _looks_like_datetime(series: pd.Series) -> bool:
         return False
 
 
-def classify_column(series: pd.Series) -> str:
+def classify_column(series: pd.Series, cat_threshold: int = 20) -> str:
     """
     Classify a single column into one of the type constants.
     Rules are checked in priority order — first match wins.
@@ -84,15 +84,15 @@ def classify_column(series: pd.Series) -> str:
         return NUMERIC_CONTINUOUS
 
     # ── Priority 8 & 9: categorical ───────────────────────────────────────
-    if n_unique <= 15:
+    if n_unique <= cat_threshold:
         return CATEGORICAL_LOW
 
     return CATEGORICAL_HIGH
 
 
-def classify_dataframe(df: pd.DataFrame) -> dict:
+def classify_dataframe(df: pd.DataFrame, cat_threshold: int = 20) -> dict:
     """
     Classify every column in the dataframe.
     Returns {col_name: type_string}
     """
-    return {col: classify_column(df[col]) for col in df.columns}
+    return {col: classify_column(df[col], cat_threshold) for col in df.columns}

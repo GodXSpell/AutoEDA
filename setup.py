@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="quick-eda",
-    version="0.1.1",
+    version="0.2.0",
     author="Tarunpreet Singh",
     description="TL;DR for your dataset — quick insights, minimal noise, actionable results.",
     long_description=open("README.md").read(),
