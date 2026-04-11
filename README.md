@@ -76,11 +76,15 @@ quick_eda(df, mode="tldr")
 quick_eda(df, plots=False)
 ```
 
-### Focus on a target column
+### Focus on a target column (v0.3.0+)
 ```python
 quick_eda(df, target="price")
 ```
-Correlations are ranked against `price`. Suggestions become model-aware.
+When `target=` is provided, `quick_eda` unlocks model-aware features:
+- **Automatic Target Type Detection:** Detects if the target is continuous (regression) or categorical (classification).
+- **Target Correlations:** Ranks all features by their correlation to the target using appropriate statistical tests (Pearson, Point-biserial, Cramér's V).
+- **Target-Aware Suggestions:** Flags features with near-zero or extremely high correlation to the target. For classification targets, checks for class imbalance.
+- **Target Visualizations:** Plots feature correlations with the target and overlays distributions of top features by target quartiles or classes.
 
 ### Get a machine-readable report back
 ```python
@@ -266,7 +270,7 @@ quick_eda/
 
 ## Roadmap
 
-**v0.1** — current focus
+**v0.1**
 - [x] Core pipeline
 - [x] Column classifier
 - [x] Suggestion engine
@@ -275,11 +279,20 @@ quick_eda/
 - [x] `mode="tldr"`
 - [x] Auto-sampling
 
-**v0.2** — planned
-- [ ] `target=` full implementation
+**v0.2**
+- [x] Categorical plots (top-N bar charts)
+- [x] Boolean plots
+- [x] Duplicate columns
+
+**v0.3** — Target Mode (current release)
+- [x] `target=` full implementation
+- [x] Class balance check
+- [x] Target-aware suggestions
+- [x] Target visualizations (feature correlations & distributions)
+
+**v0.4** — planned
 - [ ] Time series support (datetime-indexed DataFrames)
 - [ ] HTML export: `quick_eda(df, export="report.html")`
-- [ ] Categorical plots (top-N bar charts)
 - [ ] `quick_eda.assert_quality(df, max_missing=0.2)` for strict CI gates
 
 ---

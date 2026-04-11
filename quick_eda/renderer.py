@@ -170,7 +170,25 @@ def _full_stats(profiles: dict, col_types: dict):
         return
 
 
-def render_all(report: dict, mode: str = "full"):
+def _target_correlations(target: str, target_correlations: list):
+    _divider(f"FEATURE RELEVANCE (target: {target})")
+    print()
+    if not target_correlations:
+        print("    No correlations found.")
+        print()
+        return
+
+    for col, val, direction, strength in target_correlations:
+        if direction == "N/A":
+            label = strength
+        else:
+            label = f"{strength} {direction}"
+            
+        note = "  ← low predictive value" if strength == "near zero" else ""
+        print(f"    {label:<17} {col:<15} {val:.2f}{note}")
+    print()
+
+def render_all(report: dict, mode: str = "full", target: str = None):
     """
     Master render function.
     mode='tldr'  → banner + warnings + suggestions only
@@ -179,6 +197,10 @@ def render_all(report: dict, mode: str = "full"):
     _banner(report["dataset_stats"])
     _divider("WARNINGS")
     _warnings(report["suggestions"], report["col_types"])
+    
+    if target and report.get("target_correlations"):
+        _target_correlations(target, report["target_correlations"])
+        
     _divider("SUGGESTIONS")
     _suggestions(report["suggestions"], report["global_suggestions"])
 

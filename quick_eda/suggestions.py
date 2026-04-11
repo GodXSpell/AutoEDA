@@ -13,7 +13,9 @@ def suggest_for_column(
     col_name:          str,
     col_type:          str,
     profile:           dict,
-    correlation_flags: list   # list of (col_a, col_b, corr_val) pairs involving this column
+    correlation_flags: list,   # list of (col_a, col_b, corr_val) pairs involving this column
+    target_corr:       float = None,
+    target:            str   = None
 ) -> list:
     """
     Generate plain-English suggestions for a single column.
@@ -22,6 +24,13 @@ def suggest_for_column(
     """
     suggestions = []
 
+    # Target-aware suggestions
+    if target_corr is not None:
+        if abs(target_corr) < 0.01:
+            suggestions.append(f"Near-zero correlation with target '{target}' — likely low predictive value")
+        elif abs(target_corr) > 0.7:
+            suggestions.append("Strong correlation with target — important feature, handle carefully")
+            
     # ── Priority 1: DROP candidates ───────────────────────────────────────
 
     if col_type == CONSTANT:
@@ -147,15 +156,27 @@ def suggest_for_column(
 def suggest_for_dataframe(
     profiles:     dict,
     col_types:    dict,
-    correlations: list
+    correlations: list,
+    target_correlations: list = None,
+    target: str = None
 ) -> dict:
     """
     Run suggestions for every column in the dataframe.
     Returns {col_name: [suggestions]} — only includes columns that have at least one suggestion.
     """
     results = {}
+    
+    target_corrs_map = {}
+    if target_correlations:
+        for t_tuple in target_correlations:
+            # We assume it returns (col, correlation_value, direction, strength)
+            # as per the modified correlate_with_target
+            target_corrs_map[t_tuple[0]] = t_tuple[1]
 
     for col, profile in profiles.items():
+        if col == target:
+            continue
+            
         col_type = col_types.get(col, "")
 
         # find correlation pairs that involve this column
@@ -164,7 +185,9 @@ def suggest_for_dataframe(
             if a == col or b == col
         ]
 
-        suggestions = suggest_for_column(col, col_type, profile, col_correlations)
+        target_corr = target_corrs_map.get(col)
+
+        suggestions = suggest_for_column(col, col_type, profile, col_correlations, target_corr, target)
 
         if suggestions:
             results[col] = suggestions

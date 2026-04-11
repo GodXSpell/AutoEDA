@@ -138,7 +138,44 @@ def test_target_correlations_ranked(clean_df):
     report = quick_eda(clean_df, target="income", return_report=True, plots=False)
     tc     = report["target_correlations"]
     if len(tc) > 1:
-        assert abs(tc[0][1]) >= abs(tc[1][1])
+        assert tc[0][1] >= tc[1][1]
+
+def test_classification_vs_regression_detection(clean_df):
+    report_reg = quick_eda(clean_df, target="score", return_report=True, plots=False)
+    assert report_reg["target_type"] == "regression"
+    
+    report_class = quick_eda(clean_df, target="gender", return_report=True, plots=False)
+    assert report_class["target_type"] == "classification"
+
+def test_class_imbalance_suggestion_fires():
+    df = pd.DataFrame({
+        "target": ["A"] * 96 + ["B"] * 4,
+        "feature1": np.random.normal(0, 1, 100),
+        "feature2": np.random.normal(0, 1, 100)
+    })
+    report = quick_eda(df, target="target", return_report=True, plots=False)
+    assert any("Class imbalance detected" in s for s in report["global_suggestions"])
+
+def test_near_zero_correlation_suggestion_fires():
+    df = pd.DataFrame({
+        "target":     [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+        "indep_feat": [1, -1, 1, -1, 1, -1, 1, -1, 1, -1, 1] # Orthogonalish
+    })
+    report = quick_eda(df, target="target", return_report=True, plots=False)
+    has_near_zero = False
+    for sg_list in report["suggestions"].values():
+        if any("Near-zero correlation with target" in s for s in sg_list):
+            has_near_zero = True
+    assert has_near_zero
+
+def test_target_section_only_appears_when_target_is_passed(capsys, clean_df):
+    quick_eda(clean_df, plots=False)
+    captured = capsys.readouterr()
+    assert "FEATURE RELEVANCE" not in captured.out
+    
+    quick_eda(clean_df, target="income", plots=False)
+    captured = capsys.readouterr()
+    assert "FEATURE RELEVANCE (target: income)" in captured.out
 
 def test_categorical_plots_no_error():
     import pandas as pd

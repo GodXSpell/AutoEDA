@@ -90,12 +90,25 @@ def quick_eda(
     correlations       = compute_correlations(working_df, col_types)
     duplicate_cols     = detect_duplicate_columns(working_df)
     target_correlations = []
+    target_type = None
     if target is not None:
-        target_correlations = correlate_with_target(working_df, target, col_types)
+        if working_df[target].nunique() <= 10:
+            target_type = "classification"
+        else:
+            target_type = "regression"
+            
+        target_correlations = correlate_with_target(working_df, target, col_types, target_type)
 
     # step 4 — suggestions
-    col_suggestions    = suggest_for_dataframe(profiles, col_types, correlations)
+    col_suggestions    = suggest_for_dataframe(profiles, col_types, correlations, target_correlations, target)
     global_suggestions = get_global_suggestions(dataset_stats)
+    
+    if target_type == "classification":
+        # Add class balance check when target is categorical
+        value_counts = working_df[target].value_counts(normalize=True) * 100
+        for cls, pct in value_counts.items():
+            if pct < 5.0:
+                global_suggestions.append(f"Class imbalance detected — '{cls}' has only {pct:.0f}% of samples, consider oversampling")
 
     # flag duplicate columns in suggestions
     for col_a, col_b in duplicate_cols:
@@ -114,15 +127,16 @@ def quick_eda(
         "correlations":        correlations,
         "duplicate_cols":      duplicate_cols,
         "target_correlations": target_correlations,
+        "target_type":         target_type,
         "suggestions":         col_suggestions,
         "global_suggestions":  global_suggestions,
     }
 
     # ── render ─────────────────────────────────────────────────────────────
-    render_all(report, mode=mode)
+    render_all(report, mode=mode, target=target)
 
     if plots and mode != "tldr":
-        plot_all(working_df, col_types, correlations)
+        plot_all(working_df, col_types, correlations, target_correlations, target)
 
     # ── return ─────────────────────────────────────────────────────────────
     if return_report:

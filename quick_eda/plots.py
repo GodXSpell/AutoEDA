@@ -224,10 +224,113 @@ def plot_correlation(df: pd.DataFrame, col_types: dict, high_corr_pairs: list):
         plt.show()
 
 
-def plot_all(df: pd.DataFrame, col_types: dict, correlations: list):
+def plot_target_correlations(target_correlations: list, target: str):
+    """
+    Horizontal bar chart of all features ranked by abs(correlation to target).
+    Color by direction — blue for positive, coral for negative.
+    """
+    if not target_correlations:
+        return
+
+    _set_style()
+    
+    # target_correlations format: [(col_name, abs_val, direction, strength), ...]
+    # Sort ascending for plotting bars bottom-up
+    sorted_corrs = sorted(target_correlations, key=lambda x: x[1], reverse=False)
+    
+    cols = [x[0] for x in sorted_corrs]
+    # For visualization, it's nice to plot signed magnitude if direction is known and not N/A
+    # But prompt says "ranked by abs" and just "blue for positive, coral for negative"
+    vals = [x[1] for x in sorted_corrs]
+    
+    colors = []
+    for x in sorted_corrs:
+        if x[2] == "negative":
+            colors.append("coral")
+        else:
+            colors.append("#4361ee")
+
+    fig, ax = plt.subplots(figsize=(8, max(4, len(cols) * 0.4)))
+    
+    bars = ax.barh(cols, vals, color=colors, alpha=0.8)
+    ax.set_title(f"Feature Correlations with Target: '{target}'", fontsize=13, fontweight="bold")
+    ax.set_xlabel("Absolute Correlation")
+    
+    # Annotate bars
+    for bar in bars:
+        ax.text(bar.get_width() + 0.01, bar.get_y() + bar.get_height() / 2, 
+                f"{bar.get_width():.2f}", va="center", ha="left", fontsize=9, color="black")
+                
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_target_distributions(df: pd.DataFrame, target: str, col_types: dict, target_correlations: list):
+    """
+    For numeric target: color histograms by target quartile
+    For categorical target (classification): overlay distributions per class
+    Only top 4 most correlated features shown
+    """
+    if not target_correlations or target not in df.columns:
+        return
+
+    target_type = "classification" if df[target].nunique() <= 10 else "regression"
+    
+    # Get top 4 features by descending correlation magnitude
+    top_4_cols = [x[0] for x in sorted(target_correlations, key=lambda x: x[1], reverse=True)[:4]]
+    valid_cols = [c for c in top_4_cols if c in df.columns]
+    
+    if not valid_cols:
+        return
+
+    _set_style()
+    rows, cols = _make_grid(len(valid_cols), max_cols=2)
+    fig, axes = plt.subplots(rows, cols, figsize=(cols * 5, rows * 3.5))
+    
+    if rows * cols == 1:
+        axes = [axes]
+    else:
+        axes = axes.flatten().tolist()
+
+    for ax, col in zip(axes, valid_cols):
+        is_numeric = col_types.get(col) in (NUMERIC_CONTINUOUS, NUMERIC_DISCRETE)
+        
+        plot_df = df[[col, target]].dropna().copy()
+        
+        if target_type == "regression":
+            # Continuous target: quantile split
+            try:
+                plot_df["target_q"] = pd.qcut(plot_df[target], 4, labels=["Q1", "Q2", "Q3", "Q4"], duplicates="drop")
+            except ValueError:
+                # If too few unique values for qcut
+                plot_df["target_q"] = plot_df[target]
+                
+            if is_numeric:
+                sns.histplot(data=plot_df, x=col, hue="target_q", multiple="stack", palette="viridis", ax=ax, linewidth=0)
+            else:
+                sns.boxplot(data=plot_df, x="target_q", y=col, ax=ax, palette="viridis")
+            ax.set_title(f"{col} by '{target}' Quartiles", fontsize=11, fontweight="bold")
+            
+        else:
+            # Categorical target: plot distributions per target class
+            if is_numeric:
+                # overlay KDE or histograms
+                sns.kdeplot(data=plot_df, x=col, hue=target, common_norm=False, fill=True, alpha=0.4, ax=ax, palette="Set1")
+            else:
+                sns.countplot(data=plot_df, y=col, hue=target, ax=ax, palette="Set1")
+            ax.set_title(f"{col} by '{target}' Class", fontsize=11, fontweight="bold")
+
+    for ax in axes[len(valid_cols):]:
+        ax.set_visible(False)
+
+    fig.suptitle(f"Top 4 Corelated Feature Distributions by Target", fontsize=13, fontweight="bold", y=1.01)
+    plt.tight_layout()
+    plt.show()
+
+def plot_all(df: pd.DataFrame, col_types: dict, correlations: list, target_correlations: list = None, target: str = None):
     """
     Master plot function called by core.py.
-    Runs all three plots in order.
+    Runs all plots in order.
     Skips any plot where there's not enough data.
     """
     plot_distributions(df, col_types)
@@ -235,6 +338,10 @@ def plot_all(df: pd.DataFrame, col_types: dict, correlations: list):
     plot_correlation(df, col_types, correlations)
     plot_categoricals(df, col_types)
     plot_boolean(df, col_types)
+    
+    if target and target_correlations:
+        plot_target_correlations(target_correlations, target)
+        plot_target_distributions(df, target, col_types, target_correlations)
 
 def plot_categoricals(df: pd.DataFrame, col_types: dict):
     """
